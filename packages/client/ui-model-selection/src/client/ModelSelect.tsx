@@ -202,13 +202,18 @@ export function ModelSelect(
     void select(selection).then(settleSelection)
   }
 
+  const providerLabel = currentChoice?.group.name
   const modelLabel = currentChoice?.model.name ?? t('trigger.fallback')
-  const triggerLabel = effortLabel === undefined ? modelLabel : `${modelLabel} · ${effortLabel}`
+  const triggerLabel = [
+    ...(providerLabel === undefined ? [] : [providerLabel]),
+    modelLabel,
+    ...(effortLabel === undefined ? [] : [effortLabel]),
+  ].join(' · ')
   const triggerAria = currentChoice === undefined
     ? t('trigger.selectAria')
     : effortLabel === undefined
-      ? t('trigger.aria', { model: modelLabel })
-      : t('trigger.ariaEffort', { model: modelLabel, effort: effortLabel })
+      ? t('trigger.aria', { provider: providerLabel, model: modelLabel })
+      : t('trigger.ariaEffort', { provider: providerLabel, model: modelLabel, effort: effortLabel })
   itemRefs.current = []
   let itemIndex = 0
   const itemRef = () => {
@@ -236,6 +241,7 @@ export function ModelSelect(
           }
         }}
       >
+        {providerLabel !== undefined && <span className={css.triggerProvider}>{providerLabel}</span>}
         <span className={css.triggerLabel}>{modelLabel}</span>
         {effortLabel !== undefined && <span className={css.triggerEffort}>{effortLabel}</span>}
         <IconChevronDownOutline14 className={clsx(css.chevron, open && css.chevronOpen)} />

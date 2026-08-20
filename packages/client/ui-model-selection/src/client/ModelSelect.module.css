@@ -49,6 +49,14 @@
   white-space: nowrap;
 }
 
+/* Provider name leading the trigger, in the caption tone that separates the
+   model's effort value: the provider names the route, the model names the
+   seat, so the provider reads quieter than the focused model name. */
+.triggerProvider {
+  flex: 0 0 auto;
+  color: var(--dsw-alias-label-caption);
+}
+
 /* Effort value beside the model name (mock's 'High': same 13/20/500, caption tone). */
 .triggerEffort {
   flex: 0 0 auto;
