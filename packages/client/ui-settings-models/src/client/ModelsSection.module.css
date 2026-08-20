@@ -518,6 +518,40 @@
   line-height: 18px;
 }
 
+/* Reasoning-effort editor: one block spanning the row's disclosure, distinct
+   from the two capacity columns above it. */
+.modelReasoning {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+  padding-top: 10px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.modelReasoningLevels {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* One level row: offer checkbox, the level's canonical id, and its wire
+   spelling. The wire field fills the row so the map reads left to right. */
+.modelReasoningLevel {
+  display: grid;
+  grid-template-columns: 20px 96px minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+}
+
+.modelReasoningLevelName {
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+}
+
 .modelEmpty {
   padding: 12px;
   border: 1px dashed var(--dsw-alias-border-l3);

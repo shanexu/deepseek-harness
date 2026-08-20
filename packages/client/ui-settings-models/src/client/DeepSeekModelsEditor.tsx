@@ -68,13 +68,21 @@ export function formatCapacity(value: number): string {
   return String(value)
 }
 
+/**
+ * A localized validation failure for one user-owned model array. The three
+ * reasoning keys are pi-ai-only — produced by {@link validatePiAiModelEntries}
+ * — and named here because the editor cards share one failure union.
+ */
+export type DeepSeekModelsValidationKey = 'modelIdRequired' | 'modelIdDuplicate'
+  | 'modelNameInvalid' | 'modelContextInvalid' | 'modelMaxTokensInvalid'
+  | 'modelReasoningEmpty' | 'modelReasoningNoLevel' | 'modelReasoningWireMissing'
+
 /** A localized validation failure for one user-owned model array. */
 export interface DeepSeekModelsValidationFailure {
   /** Zero-based model position. */
   index: number
   /** Message key owned by the Models settings section. */
-  key: 'modelIdRequired' | 'modelIdDuplicate' | 'modelNameInvalid' | 'modelContextInvalid'
-  | 'modelMaxTokensInvalid'
+  key: DeepSeekModelsValidationKey
 }
 
 /** Convert a schema-validated catalog value into records without dropping hidden fields. */

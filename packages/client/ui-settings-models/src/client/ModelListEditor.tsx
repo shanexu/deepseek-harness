@@ -20,6 +20,7 @@ import type { DiscoveredModelView, IApiClient } from '@deepseek-ai/dsh-api-remot
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
+import { ReasoningEffortsEditor } from './ReasoningEffortsEditor.tsx'
 import { messageOf } from './store.ts'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
@@ -210,7 +211,7 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
     })
   }
 
-  const patch = (index: number, next: Record<string, string | number | undefined>): void => {
+  const patch = (index: number, next: Record<string, unknown>): void => {
     onChange(models.map((model, at) => {
       if (at !== index) return model
       // Rebuilt rather than spread over: an emptied optional field has to leave
@@ -429,6 +430,17 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
                   />
                 </label>
+                {/* Reasoning depth is per-MODEL — the composer offers each
+                    model exactly the levels this editor declares, so the
+                    control lives on the row rather than beside the route's
+                    shared fields. */}
+                <ReasoningEffortsEditor
+                  value={model['reasoningEfforts']}
+                  onChange={(next) => { patch(index, { reasoningEfforts: next }) }}
+                  t={t}
+                  disabled={disabled}
+                  index={index + 1}
+                />
               </div>
             )
             : null}

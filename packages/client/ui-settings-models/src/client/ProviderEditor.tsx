@@ -11,14 +11,15 @@
  * display name and wire protocol of a pi-ai route the adapter does not ship —
  * the two fields the create card asked that route for, editable here for the
  * same reason).
- * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
- * the models under one provider disagree about it, so a provider-scoped
- * control can only be set to a value some of them reject. The composer's
- * model picker offers each model its own levels; `settings.yaml` keeps the
- * profile field for a deployment that knows its route. Everything else stays
- * owned by `settings.yaml`. Profile edits land as minimal `settings.mutate`
- * path ops against the stored section — the card names only the fields it can
- * see instead of rebuilding the whole subtree from a partial descriptor.
+ * Reasoning effort stays per-MODEL: the model rows carry the declared levels
+ * (`reasoningEfforts`), and the composer's model picker offers each model its
+ * own levels from those — a provider-scoped control could only be set to a
+ * value some of its models reject. A route's own `reasoning` /
+ * `thinkingBudgets` defaults keep living in `settings.yaml`. Everything else
+ * stays owned by `settings.yaml`. Profile edits land as minimal
+ * `settings.mutate` path ops against the stored section — the card names only
+ * the fields it can see instead of rebuilding the whole subtree from a
+ * partial descriptor.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -27,6 +28,7 @@ import type { CredentialView, IApiClient, SettingsNamespaceView, SettingsPathOpV
 import {
   DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
 } from './DeepSeekModelsEditor.tsx'
+import { validatePiAiModelEntries } from './ReasoningEffortsEditor.tsx'
 import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
@@ -213,8 +215,11 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   }
 
   // The model list is validated by the same per-row checker for both families,
-  // so a bad row is named by its position rather than by a blanket message.
-  const modelFailure = validateDeepSeekModels(schema.getPath(draft, ['models']))
+  // so a bad row is named by its position rather than by a blanket message;
+  // only the pi-ai family additionally checks each row's reasoning map.
+  const modelFailure = layout === 'pi-ai'
+    ? validatePiAiModelEntries(schema.getPath(draft, ['models']))
+    : validateDeepSeekModels(schema.getPath(draft, ['models']))
   const keyFailure = apiKeyFailure(keyDraft)
   // What a probe or a write must carry: the typed key with paste whitespace
   // removed. A blank field yields an empty string, which both call sites read
@@ -258,7 +263,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       // with a bad row; it stays because the schema check below would refuse
       // the write with a message naming a path instead of the row, and because
       // nothing but this function decides what is written.
-      const failure = validateDeepSeekModels(schema.getPath(next, ['models']))
+      const failure = layout === 'pi-ai'
+        ? validatePiAiModelEntries(schema.getPath(next, ['models']))
+        : validateDeepSeekModels(schema.getPath(next, ['models']))
       /* v8 ignore next 3 -- unreachable from the card: the same failure disables submit */
       if (failure !== undefined) {
         return `${t('model')} ${String(failure.index + 1)}: ${t(failure.key)}`

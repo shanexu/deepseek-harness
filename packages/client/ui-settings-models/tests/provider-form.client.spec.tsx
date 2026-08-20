@@ -9,6 +9,9 @@ import { ModelsSection, providerCopy } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
 import { formatCapacity, parseCapacity } from '../src/client/DeepSeekModelsEditor.tsx'
+import {
+  REASONING_LEVELS, reasoningEffortsMode, validatePiAiModelEntries, validateReasoningEfforts,
+} from '../src/client/ReasoningEffortsEditor.tsx'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { ModelsSettingsStore, deriveKeyRef, protocolChoices } from '../src/client/store.ts'
 import { en } from '../src/client/locales.ts'
@@ -1402,5 +1405,169 @@ describe('API key field', () => {
     await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
     await waitFor(() => { expect(load).toHaveBeenCalledOnce() })
     expect(screen.queryByText(en.customTitle)).toBeNull()
+  })
+})
+
+describe('reasoning levels (per-model thinking depth)', () => {
+  it('declares levels on one model through the row and writes them to settings', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'm' }] } },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    // The fold now carries the reasoning editor; a fresh row inherits, so no
+    // level rows render yet.
+    const mode = screen.getByLabelText(`${en.modelReasoning} 1`)
+    expect(mode).toHaveProperty('value', 'inherit')
+    expect(screen.queryByLabelText(`${en.reasoningWireLabel} high 1`)).toBeNull()
+
+    // Moving to custom levels drafts the adapter-valid starter (off + high).
+    fireEvent.change(mode, { target: { value: 'levels' } })
+    const highWire = screen.getByLabelText<HTMLInputElement>(`${en.reasoningWireLabel} high 1`)
+    expect(highWire.value).toBe('high')
+
+    // Offering an extra level defaults its wire to the level's own id.
+    fireEvent.click(screen.getByLabelText(`${en.reasoningLevelToggle} max 1`))
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([
+      { id: 'm', reasoningEfforts: { off: null, high: 'high', max: 'max' } },
+    ])
+  })
+
+  it('maps an emptied off wire to the valueless null rather than an empty string', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'm', reasoningEfforts: { off: 'none', high: 'high' } }],
+        },
+      },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    // A gateway that ignores the off param is spelled the valueless key; the
+    // adapter refuses a literal empty string, so the editor must never write it.
+    expect(screen.getByLabelText<HTMLInputElement>(`${en.reasoningWireLabel} off 1`).value).toBe('none')
+    fireEvent.change(screen.getByLabelText(`${en.reasoningWireLabel} off 1`), { target: { value: '' } })
+
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([
+      { id: 'm', reasoningEfforts: { off: null, high: 'high' } },
+    ])
+  })
+
+  it('stores false for a no-reasoning model and drops the key to inherit again', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'm', reasoningEfforts: { off: null, high: 'high' } }],
+        },
+      },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    const mode = screen.getByLabelText(`${en.modelReasoning} 1`)
+    fireEvent.change(mode, { target: { value: 'disabled' } })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'm', reasoningEfforts: false }])
+
+    // Back to inherit removes the key instead of storing an empty spelling.
+    cleanup()
+    const { mutate: second } = await mountSection({
+      providers: {
+        openai: {
+          baseURL: 'https://proxy.example/v1',
+          models: [{ id: 'm', reasoningEfforts: false }],
+        },
+      },
+    })
+    openEditor('openai')
+    expandModel(1)
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'inherit' } })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(second).toHaveBeenCalled() })
+    expect(firstMutate(second).ops[0]?.value).toEqual([{ id: 'm' }])
+  })
+
+  it('refuses a map with only off — declare a thinking level or disable reasoning', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'm' }] } },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'levels' } })
+    // The starter drafts off + high; dropping high leaves off alone.
+    fireEvent.click(screen.getByLabelText(`${en.reasoningLevelToggle} high 1`))
+
+    expect(screen.getByText(`${en.model} 1: ${en.modelReasoningNoLevel}`)).toBeTruthy()
+    expect(buttonNamed(en.apply).disabled).toBe(true)
+    expect(mutate).not.toHaveBeenCalled()
+  })
+
+  it('refuses an enabled level with no wire spelling', async () => {
+    const { mutate } = await mountSection({
+      providers: { openai: { baseURL: 'https://proxy.example/v1', models: [{ id: 'm' }] } },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    fireEvent.change(screen.getByLabelText(`${en.modelReasoning} 1`), { target: { value: 'levels' } })
+    fireEvent.change(screen.getByLabelText(`${en.reasoningWireLabel} high 1`), { target: { value: '   ' } })
+
+    expect(screen.getByText(`${en.model} 1: ${en.modelReasoningWireMissing}`)).toBeTruthy()
+    expect(buttonNamed(en.apply).disabled).toBe(true)
+    expect(mutate).not.toHaveBeenCalled()
+  })
+})
+
+describe('reasoning-level validation', () => {
+  it('offers the canonical escalation order', () => {
+    expect(REASONING_LEVELS).toEqual(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'])
+  })
+
+  it.each([
+    [undefined, 'inherit'],
+    [false, 'disabled'],
+    [{ off: null, high: 'high' }, 'levels'],
+  ] as const)('reads mode %j as %s', (value, mode) => {
+    expect(reasoningEffortsMode(value)).toBe(mode)
+  })
+
+  it('accepts inherit, false, and a map with off plus a thinking level', () => {
+    expect(validateReasoningEfforts(undefined)).toBeUndefined()
+    expect(validateReasoningEfforts(false)).toBeUndefined()
+    expect(validateReasoningEfforts({ off: null, high: 'high', max: 'ultra' })).toBeUndefined()
+    // A valueless off inside a thinking map stays legal.
+    expect(validateReasoningEfforts({ off: null, minimal: 'minimal' })).toBeUndefined()
+  })
+
+  it.each([
+    [{}, 'modelReasoningEmpty'],
+    [{ off: null }, 'modelReasoningNoLevel'],
+    [{ off: null, high: null }, 'modelReasoningWireMissing'],
+    [{ off: null, high: '' }, 'modelReasoningWireMissing'],
+    [{ off: null, high: '  ' }, 'modelReasoningWireMissing'],
+    [{ off: '', high: 'high' }, 'modelReasoningWireMissing'],
+  ])('refuses %j as %s', (value, key) => {
+    expect(validateReasoningEfforts(value)).toBe(key)
+  })
+
+  it('checks each row of a pi-ai models array past the shared id checks', () => {
+    expect(validatePiAiModelEntries([
+      { id: 'first' },
+      { id: 'second', reasoningEfforts: { off: null, high: 'high' } },
+    ])).toBeUndefined()
+    expect(validatePiAiModelEntries([
+      { id: 'first' }, { id: 'second', reasoningEfforts: { off: null } },
+    ])).toEqual({ index: 1, key: 'modelReasoningNoLevel' })
   })
 })
